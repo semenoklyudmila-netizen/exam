@@ -1,0 +1,15 @@
+{
+  "name": "exam-rabbitmq-event-driven",
+  "version": "1.0.0",
+  "description": "Event-Driven архітектура з RabbitMQ — два веб-сервіси для обміну повідомленнями в реальному часі",
+  "scripts": {
+    "start": "docker compose up -d",
+    "stop": "docker compose down",
+    "logs": "docker compose logs -f",
+    "restart": "docker compose down && docker compose up -d",
+    "status": "docker compose ps"
+  },
+  "keywords": ["rabbitmq", "stomp", "event-driven", "websocket", "docker"],
+  "author": "",
+  "license": "MIT"
+}

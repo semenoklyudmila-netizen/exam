@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web2 — Subscriber</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    header h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #a78bfa;
+      letter-spacing: 0.5px;
+    }
+
+    header p {
+      color: #94a3b8;
+      margin-top: 0.4rem;
+      font-size: 0.9rem;
+    }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 600px;
+      margin-bottom: 1.5rem;
+    }
+
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ef4444;
+      transition: background 0.3s;
+    }
+
+    .dot.connected { background: #22c55e; animation: pulse 2s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    #status-text { font-size: 0.9rem; color: #94a3b8; }
+
+    .form-group { margin-bottom: 1rem; }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input, textarea {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #e2e8f0;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, textarea:focus { border-color: #a78bfa; }
+    textarea { resize: vertical; min-height: 80px; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.4rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn:not(:disabled):hover { opacity: 0.9; }
+    .btn:not(:disabled):active { transform: scale(0.97); }
+
+    .btn-primary { background: #8b5cf6; color: #fff; }
+    .btn-success { background: #22c55e; color: #fff; }
+    .btn-danger  { background: #ef4444; color: #fff; }
+    .btn-outline {
+      background: transparent;
+      border: 1px solid #475569;
+      color: #94a3b8;
+    }
+
+    .btn-row { display: flex; gap: 0.8rem; flex-wrap: wrap; }
+
+    /* Counter */
+    .counter-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 0.8rem;
+    }
+
+    .badge {
+      background: #7c3aed;
+      color: #fff;
+      border-radius: 999px;
+      padding: 0.2rem 0.7rem;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+
+    /* Messages */
+    #messages {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    #messages li {
+      background: #0f172a;
+      border: 1px solid #2e1065;
+      border-left: 4px solid #7c3aed;
+      border-radius: 8px;
+      padding: 0.7rem 0.9rem;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(-6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    #messages li .msg-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.3rem;
+    }
+
+    #messages li .from {
+      font-weight: 700;
+      color: #a78bfa;
+      font-size: 0.85rem;
+    }
+
+    #messages li .ts {
+      font-size: 0.75rem;
+      color: #475569;
+    }
+
+    #messages li .text {
+      font-size: 0.9rem;
+      color: #e2e8f0;
+      line-height: 1.4;
+    }
+
+    #messages li .raw {
+      font-size: 0.75rem;
+      color: #64748b;
+      margin-top: 0.3rem;
+      word-break: break-all;
+    }
+
+    /* Reply section */
+    .reply-section { margin-top: 1rem; }
+
+    /* Log */
+    #log {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+      max-height: 160px;
+      overflow-y: auto;
+    }
+
+    #log li {
+      background: #0f172a;
+      border: 1px solid #1e293b;
+      border-radius: 6px;
+      padding: 0.4rem 0.7rem;
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+
+    #log li .time { color: #475569; margin-right: 0.3rem; }
+    #log li.err   { color: #f87171; border-color: #7f1d1d; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🐇 Web2 — Subscriber</h1>
+  <p>Отримує повідомлення з RabbitMQ в реальному часі та може відповідати</p>
+</header>
+
+<!-- Connection -->
+<div class="card">
+  <h2>З'єднання</h2>
+  <div class="form-group">
+    <label>RabbitMQ WebSocket URL</label>
+    <input id="wsUrl" value="ws://localhost:15674/ws" />
+  </div>
+  <div class="form-group">
+    <label>Логін / Пароль</label>
+    <div style="display:flex;gap:0.6rem">
+      <input id="login" value="guest" />
+      <input id="pass"  value="guest" type="password" />
+    </div>
+  </div>
+  <div class="form-group">
+    <label>Підписатись на destination</label>
+    <input id="subDest" value="/exchange/amq.fanout" />
+  </div>
+  <div class="btn-row" style="margin-bottom:1rem">
+    <button class="btn btn-success" id="btnConnect">⚡ Підключитись</button>
+    <button class="btn btn-danger"  id="btnDisconnect" disabled>✖ Відключитись</button>
+  </div>
+  <div class="status-row">
+    <div class="dot" id="dot"></div>
+    <span id="status-text">Не підключено</span>
+  </div>
+</div>
+
+<!-- Inbox -->
+<div class="card">
+  <div class="counter-row">
+    <h2 style="margin-bottom:0">Вхідні повідомлення</h2>
+    <span class="badge" id="counter">0</span>
+  </div>
+  <ul id="messages">
+    <li style="border-left-color:#334155;border-color:#334155">
+      <div class="text" style="color:#475569">Очікування повідомлень...</div>
+    </li>
+  </ul>
+
+  <div class="reply-section">
+    <div class="form-group" style="margin-top:0.8rem">
+      <label>Відповісти (destination)</label>
+      <input id="replyDest" value="/exchange/amq.fanout" />
+    </div>
+    <div class="form-group">
+      <label>Від кого</label>
+      <input id="replyFrom" value="Web2" />
+    </div>
+    <div class="form-group">
+      <label>Текст відповіді</label>
+      <textarea id="replyBody" placeholder="Введіть відповідь...">Отримано! Відповідає Web2 👋</textarea>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnReply" disabled>📤 Надіслати відповідь</button>
+      <button class="btn btn-outline" id="btnClear">🗑 Очистити</button>
+    </div>
+  </div>
+</div>
+
+<!-- Log -->
+<div class="card">
+  <h2>Журнал подій</h2>
+  <ul id="log"></ul>
+</div>
+
+<script>
+  let client = null;
+  let subscription = null;
+  let msgCount = 0;
+
+  const $ = id => document.getElementById(id);
+
+  function log(text, isErr = false) {
+    const li = document.createElement('li');
+    if (isErr) li.classList.add('err');
+    const now = new Date().toLocaleTimeString('uk-UA');
+    li.innerHTML = `<span class="time">[${now}]</span>${text}`;
+    $('log').prepend(li);
+  }
+
+  function setConnected(yes) {
+    $('dot').classList.toggle('connected', yes);
+    $('status-text').textContent = yes ? 'Підключено — слухаю повідомлення' : 'Не підключено';
+    $('btnConnect').disabled = yes;
+    $('btnDisconnect').disabled = !yes;
+    $('btnReply').disabled = !yes;
+  }
+
+  function addMessage(data, rawBody) {
+    // Remove placeholder
+    const placeholder = $('messages').querySelector('li');
+    if (placeholder && placeholder.querySelector('.text')?.style.color === 'rgb(71, 85, 105)') {
+      placeholder.remove();
+    }
+
+    msgCount++;
+    $('counter').textContent = msgCount;
+
+    const li = document.createElement('li');
+    const ts = data.timestamp
+      ? new Date(data.timestamp).toLocaleString('uk-UA')
+      : new Date().toLocaleTimeString('uk-UA');
+
+    li.innerHTML = `
+      <div class="msg-header">
+        <span class="from">👤 ${data.from || 'Невідомо'}</span>
+        <span class="ts">${ts}</span>
+      </div>
+      <div class="text">${data.text || rawBody}</div>
+      <div class="raw">RAW: ${rawBody.length > 80 ? rawBody.slice(0, 80) + '…' : rawBody}</div>
+    `;
+    $('messages').prepend(li);
+  }
+
+  $('btnConnect').addEventListener('click', () => {
+    const url   = $('wsUrl').value.trim();
+    const login = $('login').value.trim();
+    const pass  = $('pass').value.trim();
+    const dest  = $('subDest').value.trim();
+
+    client = Stomp.client(url);
+    client.debug = () => {};
+
+    client.connect(login, pass,
+      () => {
+        setConnected(true);
+        log('✅ З\'єднано з RabbitMQ');
+
+        subscription = client.subscribe(dest, frame => {
+          log(`📨 Нове повідомлення з ${dest}`);
+          try {
+            const data = JSON.parse(frame.body);
+            addMessage(data, frame.body);
+          } catch {
+            addMessage({ from: 'Unknown', text: frame.body }, frame.body);
+          }
+        });
+
+        log(`👂 Підписано на: ${dest}`);
+      },
+      err => {
+        setConnected(false);
+        log(`❌ Помилка: ${err}`, true);
+      }
+    );
+  });
+
+  $('btnDisconnect').addEventListener('click', () => {
+    if (subscription) subscription.unsubscribe();
+    if (client) client.disconnect(() => {
+      setConnected(false);
+      log('🔌 Відключено');
+    });
+  });
+
+  $('btnReply').addEventListener('click', () => {
+    const dest = $('replyDest').value.trim();
+    const body = $('replyBody').value.trim();
+    const from = $('replyFrom').value.trim() || 'Web2';
+
+    if (!body) return;
+
+    const payload = JSON.stringify({
+      from,
+      text: body,
+      timestamp: new Date().toISOString()
+    });
+
+    client.send(dest, {}, payload);
+    log(`📤 Відповідь надіслано → ${dest}`);
+  });
+
+  $('btnClear').addEventListener('click', () => {
+    $('messages').innerHTML = `
+      <li style="border-left-color:#334155;border-color:#334155">
+        <div class="text" style="color:#475569">Очікування повідомлень...</div>
+      </li>`;
+    msgCount = 0;
+    $('counter').textContent = '0';
+  });
+</script>
+</body>
+</html>

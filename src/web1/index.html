@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Web1 — Publisher</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/stomp.js/2.3.3/stomp.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    header h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #38bdf8;
+      letter-spacing: 0.5px;
+    }
+
+    header p {
+      color: #94a3b8;
+      margin-top: 0.4rem;
+      font-size: 0.9rem;
+    }
+
+    .card {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 12px;
+      padding: 1.5rem;
+      width: 100%;
+      max-width: 600px;
+      margin-bottom: 1.5rem;
+    }
+
+    .card h2 {
+      font-size: 1rem;
+      font-weight: 600;
+      color: #cbd5e1;
+      margin-bottom: 1rem;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+    }
+
+    .status-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #ef4444;
+      transition: background 0.3s;
+    }
+
+    .dot.connected { background: #22c55e; animation: pulse 2s infinite; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+
+    #status-text {
+      font-size: 0.9rem;
+      color: #94a3b8;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.8rem;
+      color: #94a3b8;
+      margin-bottom: 0.4rem;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      color: #e2e8f0;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.95rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: #38bdf8;
+    }
+
+    textarea { resize: vertical; min-height: 80px; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.65rem 1.4rem;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn:not(:disabled):hover { opacity: 0.9; }
+    .btn:not(:disabled):active { transform: scale(0.97); }
+
+    .btn-primary { background: #0ea5e9; color: #fff; }
+    .btn-success { background: #22c55e; color: #fff; }
+    .btn-danger  { background: #ef4444; color: #fff; }
+
+    .btn-row {
+      display: flex;
+      gap: 0.8rem;
+      flex-wrap: wrap;
+    }
+
+    /* Log */
+    #log {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      max-height: 260px;
+      overflow-y: auto;
+    }
+
+    #log li {
+      background: #0f172a;
+      border: 1px solid #1e3a5f;
+      border-radius: 8px;
+      padding: 0.6rem 0.8rem;
+      font-size: 0.85rem;
+      line-height: 1.4;
+    }
+
+    #log li .time { color: #64748b; margin-right: 0.4rem; }
+    #log li .sent { color: #38bdf8; }
+    #log li .recv { color: #a78bfa; }
+    #log li .err  { color: #f87171; }
+    #log li .sys  { color: #94a3b8; }
+
+    .exchange-badge {
+      display: inline-block;
+      background: #1e3a5f;
+      color: #7dd3fc;
+      font-size: 0.75rem;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+      margin-left: 0.4rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>🐇 Web1 — Publisher</h1>
+  <p>Відправляє повідомлення до RabbitMQ через STOMP / WebSocket</p>
+</header>
+
+<!-- Connection -->
+<div class="card">
+  <h2>З'єднання</h2>
+  <div class="form-group">
+    <label>RabbitMQ WebSocket URL</label>
+    <input id="wsUrl" value="ws://localhost:15674/ws" />
+  </div>
+  <div class="form-group">
+    <label>Логін / Пароль</label>
+    <div style="display:flex;gap:0.6rem">
+      <input id="login" value="guest" placeholder="login" />
+      <input id="pass"  value="guest" placeholder="password" type="password" />
+    </div>
+  </div>
+  <div class="btn-row" style="margin-bottom:1rem">
+    <button class="btn btn-success" id="btnConnect">⚡ Підключитись</button>
+    <button class="btn btn-danger"  id="btnDisconnect" disabled>✖ Відключитись</button>
+  </div>
+  <div class="status-row">
+    <div class="dot" id="dot"></div>
+    <span id="status-text">Не підключено</span>
+  </div>
+</div>
+
+<!-- Publish -->
+<div class="card">
+  <h2>Надіслати повідомлення</h2>
+  <div class="form-group">
+    <label>Destination (черга / топік)</label>
+    <input id="destination" value="/exchange/amq.fanout" />
+  </div>
+  <div class="form-group">
+    <label>Від кого</label>
+    <input id="sender" value="Web1" />
+  </div>
+  <div class="form-group">
+    <label>Повідомлення</label>
+    <textarea id="msgBody" placeholder="Введіть текст...">Привіт від Web1! 🚀</textarea>
+  </div>
+  <button class="btn btn-primary" id="btnSend" disabled>📤 Надіслати</button>
+</div>
+
+<!-- Log -->
+<div class="card">
+  <h2>Журнал подій</h2>
+  <ul id="log"></ul>
+</div>
+
+<script>
+  let client = null;
+  let subscription = null;
+
+  const $ = id => document.getElementById(id);
+
+  function log(type, text) {
+    const li = document.createElement('li');
+    const now = new Date().toLocaleTimeString('uk-UA');
+    li.innerHTML = `<span class="time">[${now}]</span><span class="${type}">${text}</span>`;
+    $('log').prepend(li);
+  }
+
+  function setConnected(yes) {
+    $('dot').classList.toggle('connected', yes);
+    $('status-text').textContent = yes ? 'Підключено до RabbitMQ' : 'Не підключено';
+    $('btnConnect').disabled = yes;
+    $('btnDisconnect').disabled = !yes;
+    $('btnSend').disabled = !yes;
+  }
+
+  $('btnConnect').addEventListener('click', () => {
+    const url   = $('wsUrl').value.trim();
+    const login = $('login').value.trim();
+    const pass  = $('pass').value.trim();
+
+    client = Stomp.client(url);
+    client.debug = () => {};
+
+    client.connect(login, pass,
+      () => {
+        setConnected(true);
+        log('sys', '✅ З\'єднання встановлено');
+
+        // також підписуємось, щоб бачити відповіді
+        subscription = client.subscribe('/exchange/amq.fanout', frame => {
+          try {
+            const data = JSON.parse(frame.body);
+            log('recv', `📨 Отримано від <b>${data.from}</b>: ${data.text}`);
+          } catch {
+            log('recv', `📨 ${frame.body}`);
+          }
+        });
+      },
+      err => {
+        setConnected(false);
+        log('err', `❌ Помилка з'єднання: ${err}`);
+      }
+    );
+  });
+
+  $('btnDisconnect').addEventListener('click', () => {
+    if (subscription) subscription.unsubscribe();
+    if (client) client.disconnect(() => {
+      setConnected(false);
+      log('sys', '🔌 Відключено');
+    });
+  });
+
+  $('btnSend').addEventListener('click', () => {
+    const dest = $('destination').value.trim();
+    const body = $('msgBody').value.trim();
+    const from = $('sender').value.trim() || 'Web1';
+
+    if (!body) return;
+
+    const payload = JSON.stringify({
+      from,
+      text: body,
+      timestamp: new Date().toISOString()
+    });
+
+    client.send(dest, {}, payload);
+    log('sent', `📤 Надіслано → <b>${dest}</b>: ${body}`);
+  });
+</script>
+</body>
+</html>

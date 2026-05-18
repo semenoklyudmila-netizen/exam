@@ -1,0 +1,49 @@
+version: "3.9"
+
+services:
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"    # AMQP protocol (Postman / backend)
+      - "15672:15672"  # Management UI
+      - "15674:15674"  # STOMP over WebSocket (browsers)
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+    volumes:
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - rabbitmq_data:/var/lib/rabbitmq
+    command: >
+      bash -c "rabbitmq-plugins enable rabbitmq_web_stomp rabbitmq_management &&
+               rabbitmq-server"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web1:
+    image: nginx:alpine
+    container_name: web1
+    ports:
+      - "8081:80"
+    volumes:
+      - ./src/web1:/usr/share/nginx/html:ro
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  web2:
+    image: nginx:alpine
+    container_name: web2
+    ports:
+      - "8082:80"
+    volumes:
+      - ./src/web2:/usr/share/nginx/html:ro
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  rabbitmq_data:
