@@ -1,138 +1,58 @@
-# 🐇 Event-Driven Architecture — RabbitMQ + STOMP
+# Exam – Event-Driven Architecture with RabbitMQ
 
-Проект демонструє **Event-Driven архітектуру** з використанням RabbitMQ як брокера повідомлень та двох веб-клієнтів для обміну повідомленнями в реальному часі через протокол STOMP/WebSocket.
+## Task 2
 
----
+Демонстрація Event-Driven архітектури з RabbitMQ та двома веб-сервісами для обміну повідомленнями в реальному часі.
 
-## 📁 Структура проекту
-
-```
-exam/
-├── src/
-│   ├── web1/
-│   │   └── index.html        # Publisher — відправляє повідомлення
-│   └── web2/
-│       └── index.html        # Subscriber — отримує повідомлення
-├── rabbitmq.conf             # Конфігурація RabbitMQ
-├── docker-compose.yml        # Docker-оркестрація
-├── package.json
-├── .editorconfig
-├── .gitignore
-└── README.md
-```
-
----
-
-## 🚀 Запуск
-
-### Вимоги
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-
-### Команди
+## Запуск
 
 ```bash
-# Запустити всі сервіси
-npm start
-# або
-docker compose up -d
-
-# Зупинити
-npm stop
-
-# Переглянути логи
-npm run logs
-
-# Статус контейнерів
-npm run status
+brew install rabbitmq
+brew services start rabbitmq
+rabbitmq-plugins enable rabbitmq_stomp rabbitmq_web_stomp
+brew services restart rabbitmq
 ```
 
----
-
-## 🌐 Адреси сервісів
-
-| Сервіс              | URL                          | Опис                        |
-|---------------------|------------------------------|-----------------------------|
-| **Web1** (Publisher) | http://localhost:8081        | Відправляє повідомлення      |
-| **Web2** (Subscriber)| http://localhost:8082        | Отримує повідомлення         |
-| **RabbitMQ UI**      | http://localhost:15672       | Панель управління (guest/guest) |
-| **STOMP WebSocket**  | ws://localhost:15674/ws      | WebSocket endpoint           |
-| **AMQP** (Postman)   | amqp://localhost:5672        | Для Postman / backend        |
-
----
-
-## 🔄 Схема взаємодії
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                      RabbitMQ                           │
-│                                                         │
-│  Exchange: amq.fanout  ──►  Queue (auto)                │
-│                                                         │
-└─────────────────────────────────────────────────────────┘
-        ▲                          │
-        │ PUBLISH                  │ SUBSCRIBE
-        │ (STOMP/WS)               │ (STOMP/WS)
-        │                          ▼
-┌──────────────┐          ┌──────────────┐
-│    Web1      │          │    Web2      │
-│  Publisher   │          │  Subscriber  │
-│ :8081        │          │ :8082        │
-└──────────────┘          └──────────────┘
-        ▲
-        │ PUBLISH
-        │ (AMQP)
-┌──────────────┐
-│   Postman    │
-│  (крос-      │
-│  протокол)   │
-└──────────────┘
+Потім відкрити файли у браузері:
+```bash
+open src/web1/index.html
+open src/web2/index.html
 ```
 
----
+## Сервіси
 
-## 📬 Тестування через Postman
+| Сервіс | URL | Опис |
+|--------|-----|------|
+| RabbitMQ Management | http://localhost:15672 | Панель управління (guest/guest) |
+| Web1 (Publisher) | src/web1/index.html | Надсилання повідомлень |
+| Web2 (Consumer) | src/web2/index.html | Отримання повідомлень |
 
-### Надіслати повідомлення через AMQP (крос-протокольна взаємодія)
+## Перевірка роботи
 
-1. Відкрийте **Postman**
-2. Виберіть **New Request → RabbitMQ**
-3. Налаштуйте:
-   - **URL**: `amqp://guest:guest@localhost:5672`
-   - **Exchange**: `amq.fanout`
-   - **Routing Key**: `` (порожньо для fanout)
-   - **Body** (JSON):
-     ```json
-     {
-       "from": "Postman",
-       "text": "Привіт від Postman! 🚀",
-       "timestamp": "2025-01-01T12:00:00.000Z"
-     }
-     ```
-4. Натисніть **Publish**
+### Підготовка середовища
+Встановлено RabbitMQ через Homebrew та увімкнено необхідні плагіни STOMP і WebSocket.
 
-Web2 отримає це повідомлення в реальному часі — це демонструє **крос-протокольну взаємодію** між AMQP (Postman) та STOMP/WebSocket (браузер).
+### Web1 — Publisher
+Відкрито файл src/web1/index.html у браузері. Сервіс підключився до RabbitMQ через WebSocket (ws://localhost:15674/ws) з credentials guest/guest. Статус змінився на "Підключено до RabbitMQ" (зелений індикатор). У полі повідомлення введено текст "Привіт від Web1!" та натиснуто кнопку "Надіслати". Повідомлення опубліковано в exchange /exchange/amq.fanout.
 
----
+### Web2 — Consumer
+Відкрито файл src/web2/index.html у браузері. Сервіс підключився до RabbitMQ через WebSocket та підписався на /exchange/amq.fanout. Статус змінився на "Підключено — слухаю повідомлення" (зелений індикатор).
 
-## ⚙️ Конфігурація RabbitMQ
+### Результат
+Після надсилання повідомлення з Web1 воно миттєво з'явилось у розділі "ВХІДНІ ПОВІДОМЛЕННЯ" на Web2. Крос-протокольна взаємодія між двома браузерними клієнтами через RabbitMQ STOMP/WebSocket працює коректно.
 
-Файл `rabbitmq.conf` налаштовує:
-- **Management UI** на порту `15672`
-- **STOMP plugin** — протокол для браузерних клієнтів
-- **WebSTOMP** на порту `15674` — WebSocket транспорт
-- **AMQP** на порту `5672` — для Postman та backend сервісів
-- Доступ для `guest` з будь-якого хоста (тільки для розробки)
+## Postman – надсилання повідомлення
 
----
 
-## 🏗️ Event-Driven концепція
 
-| Компонент      | Роль                                                      |
-|----------------|-----------------------------------------------------------|
-| **RabbitMQ**   | Message Broker — маршрутизує події між сервісами          |
-| **amq.fanout** | Exchange — розсилає повідомлення всім підписникам         |
-| **Web1**       | Producer — генерує події (повідомлення)                   |
-| **Web2**       | Consumer — реагує на події в реальному часі               |
-| **Postman**    | External Producer — демонструє крос-протокольну підтримку |
-| **STOMP**      | Протокол для браузерів поверх WebSocket                   |
-| **AMQP**       | Нативний протокол RabbitMQ для backend/Postman            |
+
+
+POST http://localhost:15672/api/exchanges/%2F/amq.default/publish
+Authorization: Basic guest:guest
+Content-Type: application/json
+{
+"properties": {},
+"routing_key": "exam_queue",
+"payload": "Hello from Postman!",
+"payload_encoding": "string"
+}
